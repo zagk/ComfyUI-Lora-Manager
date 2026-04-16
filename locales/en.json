@@ -250,6 +250,19 @@
         "civitaiApiKey": "Civitai API Key",
         "civitaiApiKeyPlaceholder": "Enter your Civitai API key",
         "civitaiApiKeyHelp": "Used for authentication when downloading models from Civitai",
+        "civitaiHost": {
+            "label": "Civitai host",
+            "help": "Choose which Civitai site opens when using View on Civitai links.",
+            "options": {
+                "com": "civitai.com (SFW)",
+                "red": "civitai.red (unrestricted)"
+            }
+        },
+        "civitaiHostBanner": {
+            "title": "Civitai host preference available",
+            "content": "Civitai now uses civitai.com for SFW content and civitai.red for unrestricted content. You can change which site opens by default in Settings.",
+            "openSettings": "Open Settings"
+        },
         "openSettingsFileLocation": {
             "label": "Open settings folder",
             "tooltip": "Open folder containing settings.json",
@@ -685,9 +698,9 @@
                 "title": "Import a recipe from image or URL",
                 "urlLocalPath": "URL / Local Path",
                 "uploadImage": "Upload Image",
-                "urlSectionDescription": "Input a Civitai image URL or local file path to import as a recipe.",
+                "urlSectionDescription": "Input a Civitai image URL from civitai.com or civitai.red, or a local file path, to import as a recipe.",
                 "imageUrlOrPath": "Image URL or File Path:",
-                "urlPlaceholder": "https://civitai.com/images/... or C:/path/to/image.png",
+                "urlPlaceholder": "https://civitai.com/images/... or https://civitai.red/images/... or C:/path/to/image.png",
                 "fetchImage": "Fetch Image",
                 "uploadSectionDescription": "Upload an image with LoRA metadata to import as a recipe.",
                 "selectImage": "Select Image",
@@ -1090,9 +1103,9 @@
             },
             "proceedText": "Only proceed if you're sure this is what you want.",
             "urlLabel": "Civitai Model URL:",
-            "urlPlaceholder": "https://civitai.com/models/649516/model-name?modelVersionId=726676",
+            "urlPlaceholder": "https://civitai.com/models/649516/model-name?modelVersionId=726676 or https://civitai.red/models/649516/model-name?modelVersionId=726676",
             "helpText": {
-                "title": "Paste any Civitai model URL. Supported formats:",
+                "title": "Paste any Civitai model URL from civitai.com or civitai.red. Supported formats:",
                 "format1": "https://civitai.com/models/649516",
                 "format2": "https://civitai.com/models/649516?modelVersionId=726676",
                 "format3": "https://civitai.com/models/649516/model-name?modelVersionId=726676",

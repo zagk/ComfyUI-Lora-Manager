@@ -39,7 +39,10 @@ class CivitaiClient:
             return
         self._initialized = True
 
-        self.base_url = "https://civitai.com/api/v1"
+        self.base_url = "https://civitai.red/api/v1"
+
+    def _build_image_info_url(self, image_id: str) -> str:
+        return f"{self.base_url}/images?imageId={image_id}&nsfw=X"
 
     async def _make_request(
         self,
@@ -190,7 +193,9 @@ class CivitaiClient:
         """Get all versions of a model with local availability info"""
         try:
             success, result = await self._make_request(
-                "GET", f"{self.base_url}/models/{model_id}", use_auth=True
+                "GET",
+                f"{self.base_url}/models/{model_id}",
+                use_auth=True,
             )
             if success:
                 # Also return model type along with versions
@@ -346,7 +351,9 @@ class CivitaiClient:
 
     async def _fetch_model_data(self, model_id: int) -> Optional[Dict]:
         success, data = await self._make_request(
-            "GET", f"{self.base_url}/models/{model_id}", use_auth=True
+            "GET",
+            f"{self.base_url}/models/{model_id}",
+            use_auth=True,
         )
         if success:
             return data
@@ -358,7 +365,9 @@ class CivitaiClient:
             return None
 
         success, version = await self._make_request(
-            "GET", f"{self.base_url}/model-versions/{version_id}", use_auth=True
+            "GET",
+            f"{self.base_url}/model-versions/{version_id}",
+            use_auth=True,
         )
         if success:
             return version
@@ -371,7 +380,9 @@ class CivitaiClient:
             return None
 
         success, version = await self._make_request(
-            "GET", f"{self.base_url}/model-versions/by-hash/{model_hash}", use_auth=True
+            "GET",
+            f"{self.base_url}/model-versions/by-hash/{model_hash}",
+            use_auth=True,
         )
         if success:
             return version
@@ -453,13 +464,11 @@ class CivitaiClient:
         try:
             url = f"{self.base_url}/model-versions/{version_id}"
 
-            logger.debug(f"Resolving DNS for model version info: {url}")
+            logger.debug("Resolving Civitai model version info: %s", url)
             success, result = await self._make_request("GET", url, use_auth=True)
 
             if success:
-                logger.debug(
-                    f"Successfully fetched model version info for: {version_id}"
-                )
+                logger.debug("Successfully fetched model version info for: %s", version_id)
                 self._remove_comfy_metadata(result)
                 return result, None
 
@@ -479,48 +488,58 @@ class CivitaiClient:
             logger.error(error_msg)
             return None, error_msg
 
-    async def get_image_info(self, image_id: str) -> Optional[Dict]:
+    async def get_image_info(
+        self, image_id: str, source_url: str | None = None
+    ) -> Optional[Dict]:
         """Fetch image information from Civitai API
 
         Args:
             image_id: The Civitai image ID
+            source_url: Original image page URL. Accepted for caller compatibility;
+                API requests always target ``civitai.red``.
 
         Returns:
             Optional[Dict]: The image data or None if not found
         """
         try:
-            url = f"{self.base_url}/images?imageId={image_id}&nsfw=X"
             requested_id = int(image_id)
-
-            logger.debug(f"Fetching image info for ID: {image_id}")
+            url = self._build_image_info_url(image_id)
             success, result = await self._make_request("GET", url, use_auth=True)
 
-            if success:
-                if result and "items" in result and isinstance(result["items"], list):
-                    items = result["items"]
-
-                    # First, try to find the item with matching ID
-                    for item in items:
-                        if isinstance(item, dict) and item.get("id") == requested_id:
-                            logger.debug(f"Successfully fetched image info for ID: {image_id}")
-                            return item
-
-                    # No matching ID found - log warning with details about returned items
-                    returned_ids = [
-                        item.get("id") for item in items
-                        if isinstance(item, dict) and "id" in item
-                    ]
-                    logger.warning(
-                        f"CivitAI API returned no matching image for requested ID {image_id}. "
-                        f"Returned {len(items)} item(s) with IDs: {returned_ids}. "
-                        f"This may indicate the image was deleted, hidden, or there is a database lag."
-                    )
-                    return None
-
-                logger.warning(f"No image found with ID: {image_id}")
+            if not success:
+                logger.error(
+                    "Failed to fetch image info for ID %s from civitai.red: %s",
+                    image_id,
+                    result,
+                )
                 return None
 
-            logger.error(f"Failed to fetch image info for ID: {image_id}: {result}")
+            if result and "items" in result and isinstance(result["items"], list):
+                items = result["items"]
+
+                for item in items:
+                    if isinstance(item, dict) and item.get("id") == requested_id:
+                        logger.debug(
+                            "Successfully fetched image info for ID %s from civitai.red",
+                            image_id,
+                        )
+                        return item
+
+                returned_ids = [
+                    item.get("id")
+                    for item in items
+                    if isinstance(item, dict) and "id" in item
+                ]
+
+                logger.warning(
+                    "CivitAI API returned no matching image for requested ID %s from civitai.red. Returned %d item(s) with IDs: %s. This may indicate the image was deleted, hidden, or there is a database lag.",
+                    image_id,
+                    len(items),
+                    returned_ids,
+                )
+                return None
+
+            logger.warning("No image found with ID: %s", image_id)
             return None
         except RateLimitError:
             raise
@@ -539,8 +558,12 @@ class CivitaiClient:
             return None
 
         try:
-            url = f"{self.base_url}/models?username={username}"
-            success, result = await self._make_request("GET", url, use_auth=True)
+            success, result = await self._make_request(
+                "GET",
+                f"{self.base_url}/models",
+                use_auth=True,
+                params={"username": username},
+            )
 
             if not success:
                 logger.error("Failed to fetch models for %s: %s", username, result)

@@ -13,6 +13,64 @@ export const OptimizationMode = {
     THUMBNAIL: 'thumbnail',
 };
 
+export const DEFAULT_CIVITAI_PAGE_HOST = 'civitai.com';
+
+const SUPPORTED_CIVITAI_PAGE_HOSTS = new Set([
+    'civitai.com',
+    'civitai.red',
+]);
+
+export function normalizeCivitaiPageHost(hostname) {
+    if (!hostname || typeof hostname !== 'string') {
+        return DEFAULT_CIVITAI_PAGE_HOST;
+    }
+
+    const normalized = hostname.trim().toLowerCase();
+    if (SUPPORTED_CIVITAI_PAGE_HOSTS.has(normalized)) {
+        return normalized;
+    }
+
+    return DEFAULT_CIVITAI_PAGE_HOST;
+}
+
+export function buildCivitaiModelUrl(modelId, versionId = null, host = DEFAULT_CIVITAI_PAGE_HOST) {
+    const normalizedHost = normalizeCivitaiPageHost(host);
+    const normalizedModelId = modelId == null ? '' : String(modelId).trim();
+    const normalizedVersionId = versionId == null ? '' : String(versionId).trim();
+
+    if (normalizedModelId) {
+        const encodedModelId = encodeURIComponent(normalizedModelId);
+        let url = `https://${normalizedHost}/models/${encodedModelId}`;
+        if (normalizedVersionId) {
+            url += `?modelVersionId=${encodeURIComponent(normalizedVersionId)}`;
+        }
+        return url;
+    }
+
+    if (normalizedVersionId) {
+        return `https://${normalizedHost}/model-versions/${encodeURIComponent(normalizedVersionId)}`;
+    }
+
+    return null;
+}
+
+export function buildCivitaiSearchUrl(query, host = DEFAULT_CIVITAI_PAGE_HOST) {
+    const normalizedQuery = query == null ? '' : String(query).trim();
+    if (!normalizedQuery) {
+        return null;
+    }
+
+    const normalizedHost = normalizeCivitaiPageHost(host);
+    return `https://${normalizedHost}/models?query=${encodeURIComponent(normalizedQuery)}`;
+}
+
+export function buildCivitaiUrl({ modelId = null, versionId = null, modelName = null, host = DEFAULT_CIVITAI_PAGE_HOST } = {}) {
+    return (
+        buildCivitaiModelUrl(modelId, versionId, host)
+        || buildCivitaiSearchUrl(modelName, host)
+    );
+}
+
 /**
  * Rewrite Civitai preview URLs to use optimized renditions.
  * Mirrors the backend's rewrite_preview_url() function from py/utils/civitai_utils.py
@@ -117,5 +175,52 @@ export function isCivitaiUrl(url) {
         return hostname.endsWith('.civitai.com') && hostname !== 'civitai.com';
     } catch (e) {
         return false;
+    }
+}
+
+export function isSupportedCivitaiPageHost(hostname) {
+    if (!hostname) {
+        return false;
+    }
+
+    return SUPPORTED_CIVITAI_PAGE_HOSTS.has(hostname.toLowerCase());
+}
+
+export function extractCivitaiModelUrlParts(url) {
+    if (!url) {
+        return { modelId: null, modelVersionId: null };
+    }
+
+    try {
+        const parsedUrl = new URL(url);
+        if (!isSupportedCivitaiPageHost(parsedUrl.hostname)) {
+            return { modelId: null, modelVersionId: null };
+        }
+
+        const pathMatch = parsedUrl.pathname.match(/\/models\/(\d+)/);
+        const modelId = pathMatch ? pathMatch[1] : null;
+        const modelVersionId = parsedUrl.searchParams.get('modelVersionId');
+
+        return { modelId, modelVersionId };
+    } catch (e) {
+        return { modelId: null, modelVersionId: null };
+    }
+}
+
+export function extractCivitaiImageId(url) {
+    if (!url) {
+        return null;
+    }
+
+    try {
+        const parsedUrl = new URL(url);
+        if (!isSupportedCivitaiPageHost(parsedUrl.hostname)) {
+            return null;
+        }
+
+        const pathMatch = parsedUrl.pathname.match(/\/images\/(\d+)/);
+        return pathMatch ? pathMatch[1] : null;
+    } catch (e) {
+        return null;
     }
 }

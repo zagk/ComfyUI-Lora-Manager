@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, Iterable, Mapping, Sequence
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import parse_qs, urlparse, urlunparse
 
 
+_SUPPORTED_CIVITAI_PAGE_HOSTS = frozenset({"civitai.com", "civitai.red"})
+DEFAULT_CIVITAI_PAGE_HOST = "civitai.com"
 _DEFAULT_ALLOW_COMMERCIAL_USE: Sequence[str] = ("Sell",)
 _LICENSE_DEFAULTS: Dict[str, Any] = {
     "allowNoCredit": True,
@@ -15,6 +18,133 @@ _LICENSE_DEFAULTS: Dict[str, Any] = {
 }
 _COMMERCIAL_ALLOWED_VALUES = {"sell", "rent", "rentcivit", "image"}
 _COMMERCIAL_SHIFT = 1
+
+
+def is_supported_civitai_page_host(hostname: str | None) -> bool:
+    """Return whether the hostname is a supported Civitai page domain."""
+
+    if not hostname:
+        return False
+    return hostname.lower() in _SUPPORTED_CIVITAI_PAGE_HOSTS
+
+
+def normalize_civitai_page_host(hostname: str | None) -> str:
+    """Return a supported Civitai page host or the default host."""
+
+    if not isinstance(hostname, str):
+        return DEFAULT_CIVITAI_PAGE_HOST
+
+    normalized = hostname.strip().lower()
+    if is_supported_civitai_page_host(normalized):
+        return normalized
+
+    return DEFAULT_CIVITAI_PAGE_HOST
+
+
+def build_civitai_model_page_url(
+    model_id: str | int | None,
+    version_id: str | int | None = None,
+    *,
+    host: str | None = None,
+) -> str | None:
+    """Build a Civitai model or model-version page URL."""
+
+    normalized_host = normalize_civitai_page_host(host)
+    normalized_model_id = str(model_id).strip() if model_id is not None else ""
+    normalized_version_id = str(version_id).strip() if version_id is not None else ""
+
+    if normalized_model_id:
+        path = f"/models/{normalized_model_id}"
+        query = f"modelVersionId={normalized_version_id}" if normalized_version_id else ""
+        return urlunparse(("https", normalized_host, path, "", query, ""))
+
+    if normalized_version_id:
+        return urlunparse(
+            ("https", normalized_host, f"/model-versions/{normalized_version_id}", "", "", "")
+        )
+
+    return None
+
+
+def _parse_supported_civitai_page_url(url: str | None):
+    if not url:
+        return None
+
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return None
+
+    if parsed.scheme not in {"http", "https"}:
+        return None
+
+    if not is_supported_civitai_page_host(parsed.hostname):
+        return None
+
+    return parsed
+
+
+def extract_civitai_model_url_parts(
+    url: str | None,
+) -> tuple[str | None, str | None]:
+    """Extract model and version identifiers from a supported Civitai model URL."""
+
+    parsed = _parse_supported_civitai_page_url(url)
+    if parsed is None:
+        return None, None
+
+    path_match = re.search(r"/models/(\d+)", parsed.path)
+    if not path_match:
+        return None, None
+
+    model_id = path_match.group(1)
+
+    query_params = parse_qs(parsed.query)
+    version_values = query_params.get("modelVersionId") or []
+    version_id = version_values[0] if version_values else None
+    return model_id, version_id
+
+
+def extract_civitai_image_id(url: str | None) -> str | None:
+    """Extract the image identifier from a supported Civitai image page URL."""
+
+    parsed = _parse_supported_civitai_page_url(url)
+    if parsed is None:
+        return None
+
+    path_match = re.search(r"/images/(\d+)", parsed.path)
+    if not path_match:
+        return None
+
+    return path_match.group(1)
+
+
+def normalize_civitai_download_url(url: str | None) -> str | None:
+    """Rewrite Civitai download URLs to the canonical authenticated host."""
+
+    if not url:
+        return url
+
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return url
+
+    hostname = parsed.hostname.lower() if parsed.hostname else None
+    if hostname != "civitai.red" or not parsed.path.startswith("/api/download/"):
+        return url
+
+    return urlunparse(parsed._replace(netloc="civitai.com"))
+
+
+def extract_civitai_page_host(url: str | None) -> str | None:
+    """Extract the supported Civitai page host from a URL."""
+
+    parsed = _parse_supported_civitai_page_url(url)
+    if parsed is None:
+        return None
+
+    return parsed.hostname.lower() if parsed.hostname else None
 
 
 def _normalize_commercial_values(value: Any) -> Sequence[str]:
@@ -199,6 +329,10 @@ def rewrite_preview_url(
 
 __all__ = [
     "build_license_flags",
+    "extract_civitai_image_id",
+    "extract_civitai_page_host",
+    "extract_civitai_model_url_parts",
+    "is_supported_civitai_page_host",
     "resolve_license_payload",
     "resolve_license_info",
     "rewrite_preview_url",

@@ -62,6 +62,12 @@ async def test_download_file_uses_downloader(tmp_path, downloader):
     assert downloader.download_calls[0]["use_auth"] is True
 
 
+async def test_client_defaults_to_red_api_host(downloader):
+    client = await CivitaiClient.get_instance()
+
+    assert client.base_url == "https://civitai.red/api/v1"
+
+
 async def test_get_model_by_hash_enriches_metadata(monkeypatch, downloader):
     version_payload = {
         "modelId": 123,
@@ -528,6 +534,69 @@ async def test_get_image_info_handles_missing(monkeypatch, downloader):
     result = await client.get_image_info("42")
 
     assert result is None
+
+
+async def test_get_image_info_prefers_red_host_for_red_source(monkeypatch, downloader):
+    requested_urls = []
+
+    async def fake_make_request(method, url, use_auth=True, **kwargs):
+        requested_urls.append(url)
+        return True, {"items": [{"id": 124950237, "name": "target"}]}
+
+    downloader.make_request = fake_make_request
+
+    client = await CivitaiClient.get_instance()
+
+    result = await client.get_image_info(
+        "124950237", source_url="https://civitai.red/images/124950237"
+    )
+
+    assert result == {"id": 124950237, "name": "target"}
+    assert requested_urls == [
+        "https://civitai.red/api/v1/images?imageId=124950237&nsfw=X"
+    ]
+
+
+async def test_get_image_info_uses_red_host_even_for_red_source(monkeypatch, downloader):
+    requested_urls = []
+
+    async def fake_make_request(method, url, use_auth=True, **kwargs):
+        requested_urls.append(url)
+        return True, {"items": [{"id": 124950237, "name": "target"}]}
+
+    downloader.make_request = fake_make_request
+
+    client = await CivitaiClient.get_instance()
+
+    result = await client.get_image_info(
+        "124950237", source_url="https://civitai.red/images/124950237"
+    )
+
+    assert result == {"id": 124950237, "name": "target"}
+    assert requested_urls == [
+        "https://civitai.red/api/v1/images?imageId=124950237&nsfw=X",
+    ]
+
+
+async def test_get_image_info_does_not_fall_back_after_request_failure(monkeypatch, downloader):
+    requested_urls = []
+
+    async def fake_make_request(method, url, use_auth=True, **kwargs):
+        requested_urls.append(url)
+        return False, "403 forbidden"
+
+    downloader.make_request = fake_make_request
+
+    client = await CivitaiClient.get_instance()
+
+    result = await client.get_image_info(
+        "124950237", source_url="https://civitai.red/images/124950237"
+    )
+
+    assert result is None
+    assert requested_urls == [
+        "https://civitai.red/api/v1/images?imageId=124950237&nsfw=X",
+    ]
 
 
 async def test_get_image_info_handles_invalid_id(monkeypatch, downloader, caplog):
